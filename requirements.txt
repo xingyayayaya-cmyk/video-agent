@@ -1,0 +1,46 @@
+# =============================================================================
+# 出海 AI 短视频审核平台 · Python 依赖
+# -----------------------------------------------------------------------------
+# 安装：pip install -r requirements.txt
+#
+# 说明：清单按「剩余代码的真实 import」反推，已移除教育 RAG 场景的
+#       torch / transformers / FlagEmbedding / sentence-transformers /
+#       pymilvus / python-docx / pypdf / datasets / pandas 等依赖。
+# =============================================================================
+
+# ── Web 框架与服务器 ──────────────────────────────────────────────────────────
+fastapi==0.141.1
+uvicorn==0.53.0
+python-multipart==0.0.32          # FastAPI 表单/文件上传（视频提交接口依赖）
+pydantic==2.13.5
+pydantic-settings==2.15.0         # 从 .env 读配置
+
+# ── 数据库 ───────────────────────────────────────────────────────────────────
+sqlalchemy==2.1.4                 # ORM / 异步会话
+asyncpg==0.32.0                   # PostgreSQL 异步驱动
+greenlet==3.5.6                   # SQLAlchemy asyncio 必需
+
+# ── LangGraph / LangChain（审核流水线）────────────────────────────────────────
+langgraph==1.2.11                 # 9 节点审核状态机
+langgraph-checkpoint-sqlite==3.1.1    # 持久化 Checkpointer（默认后端，跨重启保留人工复核状态）
+langgraph-checkpoint-postgres==3.1.2  # 可选后端（Linux 生产，见 CHECKPOINT_BACKEND 配置）
+aiosqlite==0.22.1
+psycopg==3.3.6                    # 可选后端依赖
+psycopg-pool==3.3.3
+langchain==1.4.1
+langchain-core==1.6.3
+langchain-openai==1.6.2           # GPT-4o 视觉轨 / 音频轨 / 元数据轨
+langchain-deepseek==1.1.1         # 聚合轨 / 区域轨
+
+# ── HTTP 客户端 ──────────────────────────────────────────────────────────────
+httpx==0.28.1                     # LLM 调用（含代理配置）
+
+# ── 配置与鉴权 ───────────────────────────────────────────────────────────────
+python-dotenv==1.2.3
+python-jose==3.5.0                # JWT 签发与校验
+passlib==1.7.4
+bcrypt==4.0.1                     # 注意：必须是 4.0.1；bcrypt 5.x 与 passlib 1.7.4 不兼容
+
+# ── 外部工具（非 pip 安装，需单独准备）────────────────────────────────────────
+# ffmpeg / ffprobe   —— 抽帧、场景切换检测、音频分离
+#                       路径由 .env.local 的 FFMPEG_PATH / FFPROBE_PATH 指定

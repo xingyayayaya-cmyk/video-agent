@@ -1,0 +1,44 @@
+# =============================================================================
+# 出海 AI 短视频审核平台 · 后端镜像
+# 构建上下文 = 项目根目录（需要 requirements.txt / backend / scripts）
+#   docker build -f docker/Dockerfile.backend -t eduagent-backend .
+# =============================================================================
+FROM python:3.12-slim
+
+# ── 基础环境变量 ──────────────────────────────────────────────────────────────
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    TZ=Asia/Shanghai
+
+WORKDIR /app
+
+# ── 系统依赖 ──────────────────────────────────────────────────────────────────
+# ffmpeg  : 抽帧 / 场景检测 / 音频分离（代码里 FFMPEG_PATH 默认就是 ffmpeg，装完即用）
+# curl    : HEALTHCHECK 探活
+# libpq5  : psycopg 纯 Python 实现运行时需要的 libpq（容器内默认走 sqlite checkpointer，
+#           但如果把 CHECKPOINT_BACKEND 切成 postgres 就需要它）
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg curl libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Python 依赖（单独一层，源码改动不触发重装）──────────────────────────────────
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ── 业务源码 ──────────────────────────────────────────────────────────────────
+COPY backend/ ./backend/
+COPY scripts/ ./scripts/
+
+# 运行期需要的两个可写目录（.tools 存 checkpointer，uploads 存上传视频）
+RUN mkdir -p /app/.tools /app/uploads
+
+EXPOSE 8000
+
+# 探活：/health 不依赖数据库与模型，进程活着即 200
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8000/health || exit 1
+
+# 生产启动：单进程 uvicorn（多副本横向扩展交给编排层）
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

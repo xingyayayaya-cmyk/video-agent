@@ -1,0 +1,91 @@
+# =============================================================================
+# 出海 AI 短视频审核平台 · 全栈容器编排
+# -----------------------------------------------------------------------------
+# 一键启动：cp .env.example .env  →  填好 .env  →  docker compose up -d --build
+# 首次启动后灌测试账号：docker compose exec backend python scripts/seed_data.py
+#
+# 三个服务：
+#   postgres  数据库（容器内 5432，宿主映射 5433 避免与本机 PG 冲突）
+#   backend   FastAPI + LangGraph 审核流水线（含 ffmpeg）
+#   frontend  Nginx 托管 Vue 产物 + 反向代理 /api → backend
+#
+# 访问：http://localhost:3000   （API 文档 http://localhost:8000/docs）
+# =============================================================================
+
+name: eduagent-video-review
+
+services:
+
+  # ── PostgreSQL 主数据库 ─────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: edu_agent_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-eduagent}
+      POSTGRES_USER: ${DB_USER:-eduagent_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?请在 .env 中设置 DB_PASSWORD}
+      PGTZ: Asia/Shanghai
+      TZ: Asia/Shanghai
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # 容器首次初始化时自动建表（幂等；后端启动时也会再跑一次迁移兜底）
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/01_init_db.sql:ro
+    ports:
+      # 宿主 5433 → 容器 5432（本机 5432 常被占用）
+      - "${DB_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-eduagent_user} -d ${DB_NAME:-eduagent}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # ── 后端：FastAPI + LangGraph 审核流水线 ────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    image: eduagent-backend:latest
+    container_name: edu_agent_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # 业务密钥与大模型配置全部来自 .env（不进 Git）
+    env_file:
+      - .env
+    environment:
+      # ↓↓↓ 这几项必须覆盖 .env 里的本机值，否则容器内连不上服务名 ↓↓↓
+      DB_HOST: postgres
+      DB_PORT: 5432
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8000
+      # 容器内 ffmpeg 由 apt 安装，直接在 PATH 里
+      FFMPEG_PATH: ffmpeg
+      FFPROBE_PATH: ffprobe
+      # 人工复核中断状态持久化到挂载卷（Checkpointer）
+      CHECKPOINT_BACKEND: sqlite
+      CHECKPOINT_SQLITE_PATH: /app/.tools/checkpoints.db
+    volumes:
+      - checkpoints:/app/.tools      # 审核中断状态，重启不丢
+      - ./uploads:/app/uploads       # 上传的原视频（详情页回放）
+    ports:
+      - "8000:8000"
+
+  # ── 前端：Nginx 托管 + /api 反向代理 ────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    image: eduagent-frontend:latest
+    container_name: edu_agent_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+
+volumes:
+  postgres_data:      # 数据库数据
+  checkpoints:        # LangGraph 中断/复核状态

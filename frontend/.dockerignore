@@ -1,0 +1,7 @@
+# 前端目录单独构建时的排除清单（当前编排用项目根做上下文，
+# 此文件在「只构建 frontend/ 目录」的场景下生效）
+node_modules
+dist
+.vite
+*.log
+.DS_Store
