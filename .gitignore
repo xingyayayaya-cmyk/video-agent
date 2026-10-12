@@ -175,7 +175,9 @@ cython_debug/
 
 # 本机运行时数据（1G+ 的服务/数据库/日志，绝不入库）
 .tools/
-uploads/
+# uploads 只保留占位文件：确保别人 clone 后目录存在，供 docker 挂载
+uploads/*
+!uploads/.gitkeep
 
 # 前端依赖与构建产物
 node_modules/

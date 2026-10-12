@@ -1,0 +1,3 @@
+# 占位文件：让 uploads/ 目录在 git 中存在
+# 视频上传的原片会落在这里（已 .gitignore，只保留本占位文件）
+# docker-compose 会把它挂载到后端容器的 /app/uploads

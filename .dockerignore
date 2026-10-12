@@ -9,9 +9,14 @@
 .dockerignore
 
 # ── 密钥（绝对不进镜像）──────────────────────────────────────────────────────
+# 顶层 + 任意子目录都排除（例：frontend/.env 若被带入构建，
+# Vite 会把 VITE_API_BASE_URL=http://localhost:8000 烤进产物，绕过 nginx 反代）
 .env
 .env.local
 .env.*.local
+**/.env
+**/.env.local
+**/.env.*.local
 
 # ── 依赖与构建产物（镜像内重新安装 / 重新构建）────────────────────────────────
 frontend/node_modules
